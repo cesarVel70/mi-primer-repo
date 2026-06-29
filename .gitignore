@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+server.log
+server.err
+test_dash.py
+test_dash2.py

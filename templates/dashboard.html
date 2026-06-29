@@ -1,0 +1,149 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tango Gestión - Prototype</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+* { font-family: "Inter", sans-serif; }
+.sidebar-item { transition: all 0.2s; }
+.sidebar-item:hover { background: #1e293b; }
+.sidebar-item.active { background: #1e40af; }
+.modal-bg { background: rgba(0,0,0,0.5); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { animation: fadeIn 0.3s ease-out; }
+.chat-msg { animation: fadeIn 0.3s ease-out; }
+.scrollbar-thin::-webkit-scrollbar { width: 6px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body class="bg-slate-900 text-white h-screen overflow-hidden">
+<div class="flex h-full">
+  <div class="w-64 bg-slate-950 flex flex-col border-r border-slate-700">
+    <div class="p-4 border-b border-slate-700">
+      <h1 class="text-lg font-bold text-blue-400">Tango Gestión</h1>
+      <p class="text-xs text-slate-400">Prototype v1.0</p>
+    </div>
+    <nav class="flex-1 p-2 space-y-1 overflow-y-auto scrollbar-thin">
+      <button onclick="cargarModulo('resumen')" class="sidebar-item active w-full text-left px-3 py-2 rounded text-sm flex items-center gap-3" data-modulo="resumen"><span>📊</span> Dashboard</button>
+      <button onclick="cargarModulo('clientes')" class="sidebar-item w-full text-left px-3 py-2 rounded text-sm flex items-center gap-3" data-modulo="clientes"><span>👥</span> Clientes</button>
+      <button onclick="cargarModulo('articulos')" class="sidebar-item w-full text-left px-3 py-2 rounded text-sm flex items-center gap-3" data-modulo="articulos"><span>📦</span> Artículos</button>
+      <button onclick="cargarModulo('comprobantes')" class="sidebar-item w-full text-left px-3 py-2 rounded text-sm flex items-center gap-3" data-modulo="comprobantes"><span>🧾</span> Comprobantes</button>
+      <button onclick="cargarModulo('stock')" class="sidebar-item w-full text-left px-3 py-2 rounded text-sm flex items-center gap-3" data-modulo="stock"><span>📋</span> Stock</button>
+    </nav>
+    <div class="p-3 border-t border-slate-700 text-xs text-slate-500 text-center">Datos de ejemplo · 50 comprobantes</div>
+  </div>
+  <div class="flex-1 flex flex-col">
+    <div class="h-14 bg-slate-950 border-b border-slate-700 flex items-center justify-between px-6">
+      <h2 id="titulo-modulo" class="font-semibold text-slate-200">Dashboard</h2>
+      <div class="flex items-center gap-3"><span class="text-xs text-slate-400">admin</span><div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-xs font-bold">A</div></div>
+    </div>
+    <div class="flex-1 flex overflow-hidden">
+      <div id="contenido" class="flex-1 p-6 overflow-y-auto scrollbar-thin"><div class="text-center text-slate-400 py-20"><p class="text-2xl mb-2">⏳</p><p>Cargando...</p></div></div>
+      <div class="w-80 bg-slate-950 border-l border-slate-700 flex flex-col">
+        <div class="p-3 border-b border-slate-700">
+          <h3 class="text-sm font-semibold text-slate-300">🤖 Tango IA</h3>
+          <p class="text-xs text-slate-500">Consultá en lenguaje natural</p>
+        </div>
+        <div id="chat-mensajes" class="flex-1 p-3 overflow-y-auto scrollbar-thin space-y-3 text-sm">
+          <div class="chat-msg bg-slate-800 p-3 rounded-lg"><p class="text-blue-400 text-xs mb-1">🤖 Asistente</p><p class="text-slate-300">¡Hola! Soy el asistente Tango IA. Preguntame sobre ventas, stock, clientes.</p></div>
+        </div>
+        <div class="p-3 border-t border-slate-700">
+          <div class="flex gap-2">
+            <input id="chat-input" type="text" placeholder="Ej: ¿cuánto vendí este mes?" class="flex-1 bg-slate-800 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:border-blue-500" onkeydown="if(event.key==='Enter') enviarChat()">
+            <button onclick="enviarChat()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="modal" class="hidden fixed inset-0 modal-bg flex items-center justify-center z-50"><div class="bg-slate-800 rounded-xl p-6 w-full max-w-lg mx-4 fade-in"><div id="modal-body"></div></div></div>
+<script>
+async function apiFetch(url, metodo, body) {
+  const opts = { method: metodo || 'GET', headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  return (await fetch(url, opts)).json();
+}
+function mostrarModal(titulo, html) {
+  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modal-body').innerHTML = '<div class="flex justify-between items-center mb-4"><h3 class="text-lg font-semibold">'+titulo+'</h3><button onclick="document.getElementById(\'modal\').classList.add(\'hidden\')" class="text-slate-400 hover:text-white">✕</button></div>'+html;
+}
+function formNuevoCliente() {
+  mostrarModal('Nuevo Cliente', '<form onsubmit="event.preventDefault(); guardarCliente()" class="space-y-3"><input id="fcod" placeholder="Código" class="w-full bg-slate-700 rounded px-3 py-2 text-sm" required><input id="fnom" placeholder="Nombre" class="w-full bg-slate-700 rounded px-3 py-2 text-sm" required><input id="fcuit" placeholder="CUIT" class="w-full bg-slate-700 rounded px-3 py-2 text-sm"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Guardar</button></form>');
+}
+async function guardarCliente() {
+  await apiFetch('/api/v1/clientes', 'POST', { codigo: document.getElementById('fcod').value, nombre: document.getElementById('fnom').value, cuit: document.getElementById('fcuit').value });
+  document.getElementById('modal').classList.add('hidden');
+  cargarModulo('clientes');
+}
+async function cargarModulo(modulo) {
+  document.querySelectorAll('.sidebar-item').forEach(b => b.classList.remove('active'));
+  document.querySelector('[data-modulo="'+modulo+'"]').classList.add('active');
+  const tit = { resumen: 'Dashboard', clientes: 'Clientes', articulos: 'Artículos', comprobantes: 'Comprobantes', stock: 'Stock' };
+  document.getElementById('titulo-modulo').textContent = tit[modulo] || modulo;
+  let h = '';
+  if (modulo === 'resumen') {
+    const d = await apiFetch('/api/v1/resumen');
+    h = '<div class="fade-in"><h2 class="text-xl font-semibold mb-6">Panel de Control</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">' +
+      '<div class="bg-slate-800 p-4 rounded-xl border border-slate-700"><p class="text-slate-400 text-sm">Total Ventas</p><p class="text-2xl font-bold text-green-400">$'+d.total_ventas.toLocaleString()+'</p></div>' +
+      '<div class="bg-slate-800 p-4 rounded-xl border border-slate-700"><p class="text-slate-400 text-sm">Ventas del Mes</p><p class="text-2xl font-bold text-blue-400">$'+d.ventas_mes.toLocaleString()+'</p></div>' +
+      '<div class="bg-slate-800 p-4 rounded-xl border border-slate-700"><p class="text-slate-400 text-sm">Facturas</p><p class="text-2xl font-bold">'+d.cantidad_facturas+'</p></div>' +
+      '<div class="bg-slate-800 p-4 rounded-xl border border-slate-700"><p class="text-slate-400 text-sm">Clientes</p><p class="text-2xl font-bold">'+d.cantidad_clientes+'</p></div></div>' +
+      '<div class="bg-slate-800 p-4 rounded-xl border border-slate-700"><h3 class="font-semibold mb-3">Accesos Rápidos</h3><div class="grid grid-cols-2 md:grid-cols-4 gap-3">' +
+      '<button onclick="cargarModulo(\'clientes\')" class="bg-slate-700 p-3 rounded-lg text-sm hover:bg-slate-600">👥 Clientes</button>' +
+      '<button onclick="cargarModulo(\'comprobantes\')" class="bg-slate-700 p-3 rounded-lg text-sm hover:bg-slate-600">🧾 Facturas</button>' +
+      '<button onclick="cargarModulo(\'stock\')" class="bg-slate-700 p-3 rounded-lg text-sm hover:bg-slate-600">📋 Stock</button>' +
+      '<button onclick="cargarModulo(\'articulos\')" class="bg-slate-700 p-3 rounded-lg text-sm hover:bg-slate-600">📦 Artículos</button></div></div></div>';
+  } else if (modulo === 'clientes') {
+    const d = await apiFetch('/api/v1/clientes');
+    h = '<div class="fade-in"><div class="flex justify-between items-center mb-4"><h2 class="text-xl font-semibold">Clientes</h2><button onclick="formNuevoCliente()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm">+ Nuevo</button></div>' +
+      '<div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto"><table class="w-full text-sm"><thead><tr class="border-b border-slate-700 text-slate-400">' +
+      '<th class="p-3 text-left">Código</th><th class="p-3 text-left">Nombre</th><th class="p-3 text-left">CUIT</th><th class="p-3 text-right">Saldo Cta Cte</th></tr></thead><tbody>' +
+      d.map(c => '<tr class="border-b border-slate-700/50 hover:bg-slate-700/50"><td class="p-3">'+c.codigo+'</td><td class="p-3 font-medium">'+c.nombre+'</td><td class="p-3 text-slate-400">'+c.cuit+'</td><td class="p-3 text-right '+(c.saldo_cta_cte>0?'text-red-400':'text-green-400')+'">$'+c.saldo_cta_cte.toLocaleString()+'</td></tr>').join('') +
+      '</tbody></table></div></div>';
+  } else if (modulo === 'articulos') {
+    const d = await apiFetch('/api/v1/articulos');
+    h = '<div class="fade-in"><h2 class="text-xl font-semibold mb-4">Artículos</h2><div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto"><table class="w-full text-sm"><thead><tr class="border-b border-slate-700 text-slate-400">' +
+      '<th class="p-3 text-left">Código</th><th class="p-3 text-left">Descripción</th><th class="p-3 text-right">Precio Venta</th><th class="p-3 text-right">Stock</th><th class="p-3 text-left">Categoría</th></tr></thead><tbody>' +
+      d.map(a => '<tr class="border-b border-slate-700/50 hover:bg-slate-700/50"><td class="p-3">'+a.codigo+'</td><td class="p-3 font-medium">'+a.descripcion+'</td><td class="p-3 text-right">$'+a.precio_venta.toLocaleString()+'</td><td class="p-3 text-right '+(a.stock_actual<a.stock_minimo?'text-red-400':'text-green-400')+'">'+a.stock_actual+'</td><td class="p-3 text-slate-400">'+a.categoria+'</td></tr>').join('') +
+      '</tbody></table></div></div>';
+  } else if (modulo === 'comprobantes') {
+    const d = await apiFetch('/api/v1/comprobantes');
+    h = '<div class="fade-in"><h2 class="text-xl font-semibold mb-4">Comprobantes</h2><div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto"><table class="w-full text-sm"><thead><tr class="border-b border-slate-700 text-slate-400">' +
+      '<th class="p-3 text-left">Número</th><th class="p-3 text-left">Fecha</th><th class="p-3 text-left">Tipo</th><th class="p-3 text-right">Subtotal</th><th class="p-3 text-right">IVA</th><th class="p-3 text-right">Total</th><th class="p-3 text-left">Estado</th></tr></thead><tbody>' +
+      d.map(c => '<tr class="border-b border-slate-700/50 hover:bg-slate-700/50"><td class="p-3 font-mono text-xs">'+c.numero+'</td><td class="p-3">'+c.fecha+'</td><td class="p-3">'+c.tipo+' '+c.letra+'</td><td class="p-3 text-right">$'+c.subtotal.toLocaleString()+'</td><td class="p-3 text-right">$'+c.iva.toLocaleString()+'</td><td class="p-3 text-right font-medium">$'+c.total.toLocaleString()+'</td><td class="p-3"><span class="bg-green-900 text-green-300 px-2 py-0.5 rounded text-xs">'+c.estado+'</span></td></tr>').join('') +
+      '</tbody></table></div></div>';
+  } else if (modulo === 'stock') {
+    const d = await apiFetch('/api/v1/stock/saldos');
+    h = '<div class="fade-in"><h2 class="text-xl font-semibold mb-4">Stock</h2><div class="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto"><table class="w-full text-sm"><thead><tr class="border-b border-slate-700 text-slate-400">' +
+      '<th class="p-3 text-left">Código</th><th class="p-3 text-left">Descripción</th><th class="p-3 text-right">Stock Actual</th><th class="p-3 text-right">Stock Mínimo</th><th class="p-3 text-left">Estado</th></tr></thead><tbody>' +
+      d.map(a => '<tr class="border-b border-slate-700/50 hover:bg-slate-700/50"><td class="p-3">'+a.codigo+'</td><td class="p-3 font-medium">'+a.descripcion+'</td><td class="p-3 text-right '+(a.alerta?'text-red-400 font-bold':'text-white')+'">'+a.stock_actual+'</td><td class="p-3 text-right text-slate-400">'+a.stock_minimo+'</td><td class="p-3">'+(a.alerta?'<span class="bg-red-900 text-red-300 px-2 py-0.5 rounded text-xs">⚠ BAJO</span>':'<span class="bg-green-900 text-green-300 px-2 py-0.5 rounded text-xs">✓ OK</span>')+'</td></tr>').join('') +
+      '</tbody></table></div></div>';
+  }
+  document.getElementById('contenido').innerHTML = h;
+}
+async function enviarChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  const chat = document.getElementById('chat-mensajes');
+  chat.innerHTML += '<div class="chat-msg bg-blue-900/30 p-3 rounded-lg"><p class="text-blue-400 text-xs mb-1">👤 Tú</p><p class="text-slate-200">'+msg+'</p></div>';
+  chat.scrollTop = chat.scrollHeight;
+  chat.innerHTML += '<div class="chat-msg bg-slate-800 p-3 rounded-lg"><p class="text-yellow-400 text-xs mb-1">🤖 Pensando...</p></div>';
+  chat.scrollTop = chat.scrollHeight;
+  const res = await apiFetch('/api/v1/bot/ask', 'POST', { pregunta: msg });
+  chat.querySelector('.chat-msg:last-child').remove();
+  let extra = '';
+  if (res.sql) extra += '<div class="mt-2 pt-2 border-t border-slate-600"><p class="text-xs text-slate-500 mb-1">🔍 SQL:</p><code class="text-xs text-green-400 block">'+res.sql+'</code></div>';
+  if (res.endpoint) extra += '<p class="text-xs text-blue-400 mt-1">🔗 '+res.endpoint+'</p>';
+  chat.innerHTML += '<div class="chat-msg bg-slate-800 p-3 rounded-lg"><p class="text-blue-400 text-xs mb-1">🤖 Asistente</p><p class="text-slate-200">'+res.respuesta+'</p>'+extra+'</div>';
+  chat.scrollTop = chat.scrollHeight;
+}
+cargarModulo('resumen');
+</script>
+</body>
+</html>
